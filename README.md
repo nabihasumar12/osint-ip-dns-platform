@@ -4,7 +4,7 @@ This command-line script queries five provider APIs for a DNS hostname and write
 a comparison workbook (`.xlsx`) containing a summary and raw responses:
 
 - VirusTotal
-- SecurityTrails
+- WHOISXML
 - Shodan
 - Censys
 - AbuseIPDB
@@ -29,7 +29,7 @@ Edit `.env` and replace the example values with your API credentials:
 
 ```dotenv
 VT_API_KEY=your_virustotal_api_key
-SECURITYTRAILS_API_KEY=your_securitytrails_api_key
+WHOISXML_API_KEY=your_whoisxml_api_key
 SHODAN_API_KEY=your_shodan_api_key
 CENSYS_API_ID=your_censys_api_id
 CENSYS_API_SECRET=your_censys_api_secret
@@ -56,7 +56,7 @@ the command line; the process exits nonzero if any provider did not succeed.
 | Environment variable | Service |
 | --- | --- |
 | `VT_API_KEY` | VirusTotal |
-| `SECURITYTRAILS_API_KEY` | SecurityTrails |
+| `WHOISXML_API_KEY` | WHOISXML WHOIS API |
 | `SHODAN_API_KEY` | Shodan |
 | `CENSYS_API_ID`, `CENSYS_API_SECRET` | Censys |
 | `ABUSEIPDB_API_KEY` | AbuseIPDB |

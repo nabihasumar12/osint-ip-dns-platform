@@ -26,6 +26,7 @@ load_dotenv()
 
 MAX_IPS = 5
 TIMEOUT_SECONDS = 20
+WHOISXML_TIMEOUT_SECONDS = 100
 MAX_CELL_LENGTH = 32_000
 USER_AGENT = "authorized-passive-osint-comparison/1.0"
 
@@ -91,6 +92,7 @@ def request_json(
     *,
     headers: dict[str, str] | None = None,
     params: dict[str, str] | None = None,
+    timeout: int = TIMEOUT_SECONDS,
 ) -> Any:
     if params:
         separator = "&" if "?" in url else "?"
@@ -99,7 +101,7 @@ def request_json(
     request_headers.update(headers or {})
     request = urllib.request.Request(url, headers=request_headers)
     try:
-        with urllib.request.urlopen(request, timeout=TIMEOUT_SECONDS) as response:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
             payload = response.read()
     except urllib.error.HTTPError as exc:
         detail = exc.read(1000).decode("utf-8", errors="replace").strip()
@@ -128,11 +130,28 @@ def vt_findings(response: Any) -> dict[str, Any]:
     }
 
 
-def securitytrails_findings(response: Any) -> dict[str, Any]:
+def whoisxml_findings(response: Any) -> dict[str, Any]:
+    record = response.get("WhoisRecord", {})
+    if not isinstance(record, dict):
+        record = {}
+    registry = record.get("registryData", {})
+    if not isinstance(registry, dict):
+        registry = {}
+
+    def field(name: str) -> Any:
+        return record.get(name) or registry.get(name)
+
+    name_servers = record.get("nameServers") or registry.get("nameServers") or {}
     return {
-        "hostname": response.get("hostname"),
-        "current_dns": response.get("current_dns"),
-        "alexa": response.get("alexa"),
+        "domain": field("domainName"),
+        "registrar": field("registrarName"),
+        "created": field("createdDate") or field("createdDateNormalized"),
+        "updated": field("updatedDate") or field("updatedDateNormalized"),
+        "expires": field("expiresDate") or field("expiresDateNormalized"),
+        "status": field("status"),
+        "name_servers": name_servers.get("hostNames", []),
+        "domain_availability": record.get("domainAvailability"),
+        "estimated_domain_age": record.get("estimatedDomainAge"),
     }
 
 
@@ -239,7 +258,7 @@ def collect_results(domain: str) -> tuple[list[str], list[ProviderResult]]:
     ips = resolve_public_ips(domain)
 
     vt_key = os.getenv("VT_API_KEY", "")
-    st_key = os.getenv("SECURITYTRAILS_API_KEY", "")
+    whoisxml_key = os.getenv("WHOISXML_API_KEY", "")
     shodan_key = os.getenv("SHODAN_API_KEY", "")
     censys_id = os.getenv("CENSYS_API_ID", "")
     censys_secret = os.getenv("CENSYS_API_SECRET", "")
@@ -256,13 +275,15 @@ def collect_results(domain: str) -> tuple[list[str], list[ProviderResult]]:
             vt_findings,
         ),
         collect_single(
-            "SecurityTrails",
-            [] if st_key else ["SECURITYTRAILS_API_KEY"],
+            "WHOISXML",
+            [] if whoisxml_key else ["WHOISXML_API_KEY"],
             lambda: request_json(
-                f"https://api.securitytrails.com/v1/domain/{urllib.parse.quote(domain, safe='')}",
-                headers={"APIKEY": st_key},
+                "https://www.whoisxmlapi.com/whoisserver/WhoisService",
+                headers={"Authorization": f"Bearer {whoisxml_key}"},
+                params={"domainName": domain, "outputFormat": "JSON"},
+                timeout=WHOISXML_TIMEOUT_SECONDS,
             ),
-            securitytrails_findings,
+            whoisxml_findings,
         ),
     ]
 
